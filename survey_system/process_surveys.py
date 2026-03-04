@@ -200,11 +200,38 @@ def main():
         extracted_data_list = mock_data
     else:
         # For production: process actual images from input_dir
-        # You would call ocr_processor.extract_from_images(input_dir)
-        # This requires model loading which we might skip for the demo/verification
-        print("Model-based OCR not fully active in this script environment (requires GPU/Model).")
-        print("To use with real images, ensure OCR models are properly loaded.")
-        return
+        print("Initializing OCR model (this may take a moment and requires GPU)...")
+        try:
+            model, processor = ocr_processor.load_model()
+            extracted_data_list = []
+            
+            # The ocr_processor.py expects images in subfolders.
+            # If images are in the root of input_dir, we process that folder directly.
+            # Otherwise, we walk the subdirectories.
+            
+            subdirs = [os.path.join(input_dir, d) for d in os.listdir(input_dir) if os.path.isdir(os.path.join(input_dir, d))]
+            folder_to_process = subdirs if subdirs else [input_dir]
+            
+            for folder in folder_to_process:
+                print(f"Extracting data from folder: {folder}")
+                extraction_result = ocr_processor.process_folder(folder, model, processor, None)
+                if extraction_result:
+                    try:
+                        # Clean and parse the OCR output (which is often wrapped in markdown blocks)
+                        cleaned_json = extraction_result.strip()
+                        if cleaned_json.startswith("```json"):
+                            cleaned_json = cleaned_json[7:]
+                        if cleaned_json.endswith("```"):
+                            cleaned_json = cleaned_json[:-3]
+                        
+                        data = json.loads(cleaned_json.strip())
+                        extracted_data_list.append(data)
+                    except json.JSONDecodeError as e:
+                        print(f"Warning: Failed to parse JSON from {folder}: {e}")
+        except Exception as e:
+            print(f"Error in OCR pipeline: {e}")
+            print("Ensure you have the required dependencies and hardware (GPU) to run the model.")
+            return
 
     # Group data by teacher/department and aggregate responses
     teacher_groups = process_ocr_data(extracted_data_list)

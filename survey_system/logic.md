@@ -17,14 +17,15 @@ Aaliah University/
 └── requirements.txt        # System dependencies
 ```
 
-## Automated Pipeline Workflow
+## Data Flow: Image to Report
 
-The process follow these steps when running `python process_surveys.py`:
+The system is designed to be **fully automated**. No manual data entry is required in the final pipeline.
 
-1.  **Image Discovery**: The script scans the `input/` folder for images.
-2.  **OCR Extraction**: Each image is processed by `ocr_processor.py` (using the Qwen2-VL vision model) to extract data into a JSON format containing labels like `Q1`, `Q2`, etc.
-3.  **Data Mapping**: The extracted scores are passed through the mapping logic to convert raw question data into report categories.
-4.  **CSV Update**: The mapped results are appended to `survey_reports.csv` along with calculated totals and percentages.
+1.  **Image Discovery**: The `process_surveys.py` script automatically finds handwritten survey images in the `input/` folder.
+2.  **AI Extraction**: It uses the `ocr_processor.py` engine (Qwen2-VL AI) to "read" the handwritten scores, teacher names, and departments directly from the JPEG files.
+3.  **JSON Conversion**: The AI turns the visual data into a digital JSON format (e.g., Q1: "5", Q2: "4").
+4.  **Logical Mapping**: The script maps these results to the 7-column report categories.
+5.  **Final CSV**: The system appends the result to `survey_reports.csv`.
 
 ## Scoring & Mapping Logic
 
