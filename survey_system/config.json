@@ -1,0 +1,40 @@
+{
+  "system_config": {
+    "survey_form": {
+      "total_questions": 14,
+      "evaluation_questions": 7,
+      "max_score_per_question": 5,
+      "max_total_score": 35
+    },
+    "category_mapping": {
+      "Q1": "Preparation & Organization for Class (5)",
+      "Q2": "Subject knowledge & Expertise (5)",
+      "Q3": "Explanation & Empathy to student (5)",
+      "Q4": "Discipline & Punctuality (5)",
+      "Q5": "Regularity & Timeliness (5)",
+      "Q6": "Encouragement to Participative Learning (5)",
+      "Q7": "Teacher availability beyond classroom (5)"
+    },
+    "processing": {
+      "input_directory": "../input",
+      "output_csv": "survey_reports.csv",
+      "supported_image_formats": ["jpg", "jpeg", "png"]
+    },
+    "ocr_model": {
+      "model_name": "Qwen/Qwen2-VL-7B-Instruct",
+      "requires_gpu": true,
+      "device_map": "auto"
+    },
+    "semester_info": {
+      "year": 2025,
+      "semester": "Odd (Autumn)",
+      "report_title": "Students' Satisfaction Survey Report"
+    }
+  },
+  "aggregation_rules": {
+    "grouping": "By department and teacher name",
+    "average_calculation": "Mean of all student responses per category",
+    "score_clamping": "Scores clamped to 0-5 range",
+    "percentage_calculation": "(total_score / 35) * 100"
+  }
+}

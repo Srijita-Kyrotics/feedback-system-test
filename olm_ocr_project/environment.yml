@@ -1,0 +1,17 @@
+name: olm_ocr_env
+channels:
+  - defaults
+dependencies:
+  - python=3.11
+  - pip
+  - pip:
+      - torch
+      - torchvision
+      - torchaudio
+      - transformers
+      - qwen-vl-utils
+      - accelerate
+      - pillow
+      - pandas
+      - openpyxl
+      - git+https://github.com/allenai/olmocr.git
