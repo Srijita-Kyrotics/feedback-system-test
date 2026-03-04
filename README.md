@@ -1,4 +1,4 @@
-# Aaliah University Survey Processing System
+# Student Feedback Survey Processing System
 
 This repository contains the complete automated pipeline for processing student satisfaction survey forms from handwritten images into standardized reports.
 
