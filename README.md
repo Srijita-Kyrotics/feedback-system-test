@@ -1,55 +1,55 @@
-# Student Feedback Survey Processing System
+# Student Feedback Survey Processing System (Aliah University)
 
-This repository contains the complete automated pipeline for processing student satisfaction survey forms from handwritten images into standardized reports.
+This repository contains an automated pipeline for processing student satisfaction survey forms using Vision AI. It converts handwritten feedback images into a standardized CSV report.
 
-## Project Overview
+## 🚀 Key Features & Optimizations
 
-The system automates the extraction and aggregation of student feedback. It uses a vision-based AI model to read scores and metadata from handwritten survey forms, calculates averages for each teacher across multiple students, and generates a formatted CSV report.
+- **Vision AI Core**: Uses the **Qwen2-VL-7B** model for high-accuracy OCR of handwritten text and survey markings.
+- **VRAM Optimization**: Implements **4-bit Quantization** (via `bitsandbytes`) to allow the 7B model to run on GPUs with ~22GB VRAM (e.g., RTX 3090/4090).
+- **Sequential Image Processing**: Multi-page forms are processed one-by-one to prevent CUDA Out Of Memory (OOM) errors during batch inference.
+- **Robust Data Aggregation**: Implements a sophisticated merge logic that combines data from multiple images (e.g., Page 1 and Page 2) while intelligently filtering out "Not Provided" or "Unknown" fallbacks to ensure no data loss.
+- **Fail-safe JSON Parsing**: Built-in robust parsing to extract structured JSON data even when the AI provides conversational or markdown-wrapped responses.
 
-## Directory Structure
+## 📁 Project Structure
 
-- input: Folder for storing raw handwritten survey images (JPEG format).
-- output: Folder containing report templates and sample outputs.
-- olm_ocr_project: The core OCR engine and processing logic.
-- survey_system: Main automation scripts and generated reports.
-- survey_system/process_surveys.py: The main script that runs the entire pipeline.
-- survey_system/logic.md: Detailed documentation of the mapping and calculation logic.
-- survey_reports.csv: The final generated report.
+- `input/`: Storage for raw handwritten survey images (JPEG/PNG).
+- `survey_system/`: 
+  - `process_surveys.py`: **Main Automation Entry Point**. Orchestrates the OCR and report generation.
+  - `survey_reports.csv`: Final persistent ledger of teacher evaluations.
+- `olm_ocr_project/`:
+  - `ocr_processor.py`: Core AI logic handling model loading, quantization, and sequential inference.
 
-## Requirements
+## 🛠️ Technical Logic
 
-The project requires Python 3.10+ and several specialized libraries for OCR and data processing:
-- torch
-- transformers
-- qwen-vl-utils
-- pandas
-- openpyxl
+### 1. Extraction Pipeline
+The system identifies the following from each form:
+- **Header Metadata**: Department, Semester, Year, Teacher Name, Course Name.
+- **Categorical Scores (Q1-Q14)**: Interprets "tick" marks across Likert scale columns (1-5).
+- **Open Feedback (Q15)**: Transcribes handwritten comments.
 
-A GPU is recommended for the actual OCR extraction part of the pipeline.
+### 2. Calculation Logic
+The university report focuses on the **first 7 questions**:
+- **Averaging**: Calculates the mean score for each of the 7 categories across all student responses for a teacher.
+- **Totaling**: Sums the 7 category averages (Max 35.0).
+- **Percentage**: `(Total / 35.0) * 100`.
 
-## Usage
+## 📦 Requirements
 
-### Running the Full Pipeline
-To process all images in the input directory and update the report:
-1. Place images in the input folder.
-2. Run the following command:
-   python survey_system/process_surveys.py
+- Python 3.10+
+- `torch`, `transformers`, `accelerate`, `bitsandbytes`
+- `qwen-vl-utils`, `torchvision`, `pandas`, `openpyxl`
 
-### Running in Mock Mode
-If you are in an environment without a GPU or the required AI models, you can verify the processing logic and mapping using the mock flag:
+## 🏃 How to Run
+
+1. **Place images**: Add survey JPEGs to the `input/` folder.
+2. **Execute Pipeline**:
+   ```bash
+   python survey_system/process_surveys.py --input_dir input
+   ```
+3. **Mock Mode (Testing)**:
+   ```bash
    python survey_system/process_surveys.py --mock
+   ```
 
-This will use simulated data instead of reading from images but will follow the exact same calculation and mapping rules.
-
-## Scoring Logic
-
-The system identifies 14 questions on the survey form but only tracks the first 7 questions for the final report categories:
-1. Preparation and Organization for Class
-2. Subject knowledge and Expertise
-3. Explanation and Empathy to student
-4. Discipline and Punctuality
-5. Regularity and Timeliness
-6. Encouragement to Participative Learning
-7. Teacher availability beyond classroom
-
-Questions 8 through 14 are ignored during the report generation.
+## 📊 Output
+Results are appended to `survey_reports.csv` with full university-standard headers and teacher/department categorization.

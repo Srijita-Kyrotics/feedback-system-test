@@ -4,8 +4,8 @@ import json
 import pandas as pd
 from PIL import Image
 from PIL import Image
+import torch
 # Heavy imports moved inside functions or made optional
-# import torch
 # from transformers import Qwen2VLForConditionalGeneration, AutoTokenizer, AutoProcessor
 # from qwen_vl_utils import process_vision_info
 
@@ -14,13 +14,20 @@ def load_model(model_name="Qwen/Qwen2-VL-7B-Instruct"):
     Load the Qwen2-VL model and processor.
     """
     import torch
-    from transformers import Qwen2VLForConditionalGeneration, AutoProcessor
-    print(f"Loading model: {model_name}...")
+    from transformers import Qwen2VLForConditionalGeneration, AutoProcessor, BitsAndBytesConfig
+    print(f"Loading model: {model_name} (with 4-bit quantization)...")
     try:
+        quantization_config = BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_compute_dtype=torch.float16,
+            bnb_4bit_quant_type="nf4",
+            bnb_4bit_use_double_quant=True,
+        )
         model = Qwen2VLForConditionalGeneration.from_pretrained(
             model_name,
-            torch_dtype="auto",
+            torch_dtype=torch.float16,
             device_map="auto",
+            quantization_config=quantization_config,
         )
         processor = AutoProcessor.from_pretrained(model_name)
         return model, processor
@@ -180,52 +187,99 @@ def process_folder(folder_path, model, processor, template_path):
             return filename  
     images.sort(key=sort_key)
     
-    # Prompt
-    prompt_text = """Extract the following fields from the form:
-    1. Header Info: Department, Semester, Year, CourseCode, CourseName, TaughtBy, FullPart
-    2. Survey Answers: Q1 to Q14 (Likert values, e.g. "5 (Strongly Agree)" or just the number "5")
-    3. Q15 Answer (Open ended text)
+    print(f"Processing {len(images)} images in {folder_path}...")
     
-    Output as JSON with keys: "Department", "Semester", "Year", "CourseCode", "CourseName", "TaughtBy", "FullPart", "Q1"..."Q14", "Q15".
-    """
-
     from qwen_vl_utils import process_vision_info
     
-    messages = [
-        {
-            "role": "user",
-            "content": [
-                {"type": "image", "image": img_path} for img_path in images
-            ] + [
-                {"type": "text", "text": prompt_text}
-            ],
-        }
-    ]
-
-    text = processor.apply_chat_template(
-        messages, tokenize=False, add_generation_prompt=True
-    )
+    # Process images one by one to save memory, then combine (or just take the first if it's a single form)
+    # The current pipeline seems to expect one JSON for the whole folder.
+    # Usually these are multi-page forms of the SAME survey.
     
-    image_inputs, video_inputs = process_vision_info(messages)
-    inputs = processor(
-        text=[text],
-        images=image_inputs,
-        videos=video_inputs,
-        padding=True,
-        return_tensors="pt",
-    )
-    inputs = inputs.to(model.device)
+    # We will try to combine them in the prompt or process them and merge JSONs.
+    # For now, let's just try processing them one by one and merging the data.
+    aggregated_data = {}
+    
+    # Prompt
+    prompt_text = """Analyze this handwritten Aliah University Survey form carefully:
+    1. HEADER: Identify the handwritten text. Specifically look for:
+       - Department (e.g., "Nursing")
+       - Semester (e.g., "7th")
+       - Year (e.g., "2025")
+       - Taught By (e.g., "Dr. Rumi Sen")
+       - Course Name (e.g., "B.Sc Nursing")
+    2. SCORES (Q1-Q14): The form has a table with columns 1 to 5. Identify the column with the handwritten 'tick' (check mark) for each question.
+       - Output the numeric score (1-5) for each question.
+    3. JSON OUTPUT: Return only a flat JSON object with keys: "Department", "Semester", "Year", "CourseCode", "CourseName", "TaughtBy", "FullPart", "Q1", "Q2", "Q3", "Q4", "Q5", "Q6", "Q7", "Q8", "Q9", "Q10", "Q11", "Q12", "Q13", "Q14", "Q15".
+    
+    If text is cursive, read it carefully (e.g., "Nursing", "Rumi Sen"). If a field is blank on one page, it may be on the other image.
+    """
 
-    print(f"Processing images in {folder_path}...")
-    generated_ids = model.generate(**inputs, max_new_tokens=2048)
-    generated_ids_trimmed = [
-        out_ids[len(in_ids) :] for in_ids, out_ids in zip(inputs.input_ids, generated_ids)
-    ]
-    output_text = processor.batch_decode(
-        generated_ids_trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False
-    )[0]
+    for img_path in images:
+        print(f"  Processing image: {os.path.basename(img_path)}")
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "image", "image": img_path},
+                    {"type": "text", "text": prompt_text}
+                ],
+            }
+        ]
 
-    return output_text
+        text = processor.apply_chat_template(
+            messages, tokenize=False, add_generation_prompt=True
+        )
+        
+        image_inputs, video_inputs = process_vision_info(messages)
+        inputs = processor(
+            text=[text],
+            images=image_inputs,
+            videos=video_inputs,
+            padding=True,
+            return_tensors="pt",
+        )
+        inputs = inputs.to(model.device)
+
+        with torch.no_grad():
+            generated_ids = model.generate(**inputs, max_new_tokens=1024)
+        
+        generated_ids_trimmed = [
+            out_ids[len(in_ids) :] for in_ids, out_ids in zip(inputs.input_ids, generated_ids)
+        ]
+        output_text = processor.batch_decode(
+            generated_ids_trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False
+        )[0]
+        
+        # Robust JSON extraction
+        try:
+            # Find the first '{' and last '}' to extract the JSON block
+            start_idx = output_text.find('{')
+            end_idx = output_text.rfind('}')
+            
+            if start_idx != -1 and end_idx != -1:
+                json_str = output_text[start_idx:end_idx+1]
+                data = json.loads(json_str)
+                
+                # Exclusion list for non-data strings
+                null_values = ["", "0", "None", "not provided", "none", "unknown", "n/a", "null", "not specified"]
+                
+                print(f"      Extracted {len(data)} fields from image.")
+                
+                for k, v in data.items():
+                    val_str = str(v).strip().lower()
+                    if val_str not in null_values:
+                        aggregated_data[k] = v
+            else:
+                print(f"      Warning: No JSON block found in AI response for {img_path}")
+                    
+        except Exception as e:
+            print(f"    Warning: Failed to parse or merge result for {img_path}: {e}")
+            print(f"    Raw preview: {output_text[:200]}...")
+
+    print(f"  Final Aggregated Teacher Data for {folder_path}:")
+    print(f"    Teacher: {aggregated_data.get('TaughtBy', 'Unknown')}")
+    print(f"    Dept: {aggregated_data.get('Department', 'Unknown')}")
+    return json.dumps(aggregated_data)
 
 def main():
     parser = argparse.ArgumentParser(description="Extract text from form images to Excel using OLM OCR (Qwen2-VL).")
