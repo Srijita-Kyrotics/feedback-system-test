@@ -2,9 +2,10 @@ import os
 import argparse
 import json
 import pandas as pd
-from PIL import Image
+from PIL import Image 
 from PIL import Image
 import torch
+#import statements
 # Heavy imports moved inside functions or made optional
 # from transformers import Qwen2VLForConditionalGeneration, AutoTokenizer, AutoProcessor
 # from qwen_vl_utils import process_vision_info
