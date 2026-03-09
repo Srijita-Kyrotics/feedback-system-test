@@ -1,4 +1,4 @@
-# Student Feedback Survey Processing System (Aliah University)
+# Student Feedback Survey Processing System 
 
 This repository contains an automated pipeline for processing student satisfaction survey forms using Vision AI. It converts handwritten feedback images into a standardized CSV report.
 
